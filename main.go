@@ -2,11 +2,11 @@ package main
 
 import (
 	"fmt"
-	"html/template"
-	"image"
+	// "html/template"
+	// "image"
 	"log"
 	"net/http"
-	"os"
+	// "os"
 	"sync"
 	"time"
 
@@ -16,32 +16,19 @@ import (
 var (
 	err      error
 	webcam   *gocv.VideoCapture
-	frame_id int
+	frame []byte
+	mutex = &sync.Mutex{}
 )
 
-var buffer = make(map[int][]byte)
-var frame []byte
-var mutex = &sync.Mutex{}
-
 func main() {
-
 	host := "0.0.0.0:3000"
 
 	// open webcam
-	if len(os.Args) < 2 {
-		fmt.Println(">> device /dev/video0 (default)")
-		webcam, err = gocv.VideoCaptureDevice(0)
-	} else {
-		fmt.Println(">> file/url :: " + os.Args[1])
-		webcam, err = gocv.VideoCaptureFile(os.Args[1])
-	}
-
+	webcam, err = gocv.VideoCaptureDevice(1)
 	if err != nil {
 		fmt.Printf("Error opening capture device: \n")
 		return
 	}
-	defer webcam.Close()
-
 	// start capturing
 	go getframes()
 
@@ -52,8 +39,7 @@ func main() {
 		w.Header().Set("Content-Type", "multipart/x-mixed-replace; boundary=frame")
 		data := ""
 		for {
-			/*			fmt.Println("Frame ID: ", frame_id)
-			 */mutex.Lock()
+			mutex.Lock()
 			data = "--frame\r\n  Content-Type: image/jpeg\r\n\r\n" + string(frame) + "\r\n\r\n"
 			mutex.Unlock()
 			time.Sleep(33 * time.Millisecond)
@@ -61,17 +47,14 @@ func main() {
 		}
 	})
 
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		t, _ := template.ParseFiles("index.html")
-		t.Execute(w, "index")
-	})
-
 	log.Fatal(http.ListenAndServe(host, nil))
 }
 
 func getframes() {
+	time.Sleep(1000 * time.Millisecond)
 	img := gocv.NewMat()
 	defer img.Close()
+	defer webcam.Close()
 	for {
 		if ok := webcam.Read(&img); !ok {
 			fmt.Printf("Device closed\n")
@@ -80,9 +63,7 @@ func getframes() {
 		if img.Empty() {
 			continue
 		}
-		frame_id++
-		gocv.Resize(img, &img, image.Point{}, float64(0.5), float64(0.5), 0)
+		// gocv.Resize(img, &img, image.Point{}, float64(0.5), float64(0.5), 0)
 		frame, _ = gocv.IMEncode(".jpg", img)
-
 	}
 }
